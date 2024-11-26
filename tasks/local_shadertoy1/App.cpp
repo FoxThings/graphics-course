@@ -184,7 +184,12 @@ void App::drawFrame()
       );
       etna::flush_barriers(currentCmdBuf);
 
-      currentCmdBuf.dispatch(resolution.x, resolution.y, 1);
+      const int groupSize = 32;
+      currentCmdBuf.dispatch(
+        resolution.x / groupSize + 1,
+        resolution.y / groupSize + 1,
+        1
+      );
 
       const auto subresource = vk::ImageSubresourceLayers {
         .aspectMask = vk::ImageAspectFlagBits::eColor,
