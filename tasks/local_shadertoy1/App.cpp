@@ -191,7 +191,7 @@ void App::drawFrame()
         .layerCount = 1
       };
 
-      const auto srcOffset = std::array {
+      const auto offset = std::array {
         vk::Offset3D{},
         vk::Offset3D{
           .x = static_cast<int32_t>(resolution.x),
@@ -200,24 +200,11 @@ void App::drawFrame()
         }
       };
 
-      const auto dstOffset = std::array {
-        vk::Offset3D{
-          .x = 0,
-          .y = static_cast<int32_t>(resolution.y),
-          .z = 0
-        },
-        vk::Offset3D{
-          .x = static_cast<int32_t>(resolution.x),
-          .y = 0,
-          .z = 1
-        }
-      };
-
       const auto regions = vk::ImageBlit {
         .srcSubresource = subresource,
-        .srcOffsets = srcOffset,
+        .srcOffsets = offset,
         .dstSubresource = subresource,
-        .dstOffsets = dstOffset
+        .dstOffsets = offset
       };
 
       // Setting state for transfer. Backbuffer is already in appropriate state.

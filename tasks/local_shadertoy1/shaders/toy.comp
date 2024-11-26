@@ -99,6 +99,9 @@ float softShadow(vec3 from, vec3 dir, float minDist, float maxDist) {
 }
 
 void mainImage(out vec4 fragColor, in vec2 fragCoord, in vec2 iResolution) {
+    fragCoord.y = -fragCoord.y;
+    iResolution.y = -iResolution.y;
+
     bool hit;
     int objectID;
     vec3 color;
