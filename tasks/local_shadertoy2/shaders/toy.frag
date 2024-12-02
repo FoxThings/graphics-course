@@ -1,8 +1,10 @@
-#version 430
+#version 450
+#extension GL_ARB_separate_shader_objects : enable
 
-layout(local_size_x = 32, local_size_y = 32) in;
+layout(location = 0) out vec4 fragColor;
 
-layout(binding = 0, rgba8) uniform image2D resultImage;
+layout(binding = 0) uniform sampler2D iChannel0;
+layout(binding = 1) uniform sampler2D iChannel1;
 
 #define MAX_STEPS    90
 #define MAX_DIST     10.0
@@ -11,7 +13,6 @@ layout(binding = 0, rgba8) uniform image2D resultImage;
 
 const vec3 eye   = vec3(0, 1, 5);
 const vec3 light = vec3(2, 5, 5);
-
 
 float sphereSDF(vec3 p, vec3 center, float radius) {
     return length(p - center) - radius;
@@ -22,10 +23,14 @@ float planeSDF(vec3 p) {
     return p.y + EPS;
 }
 
+vec3 getMovingSphereCenter() {
+    float shpereY = sin(-1.0) * 1.0 + 2.0;
+
+    return vec3(0, shpereY, 0);
+}
 
 float scene(vec3 point, out int objectID) {
-    float shpereY = sin(-1.0) * 1.0 + 2.0;
-    float sphereDist = sphereSDF(point, vec3(0, shpereY, 0), 1.0);
+    float sphereDist = sphereSDF(point, getMovingSphereCenter(), 1.0);
     float planeDist = planeSDF(point);
 
 
@@ -98,37 +103,51 @@ float softShadow(vec3 from, vec3 dir, float minDist, float maxDist) {
     return shadowFactor;
 }
 
-void mainImage(out vec4 fragColor, in vec2 fragCoord, in vec2 iResolution) {
+void mainImage(in vec2 fragCoord, in vec2 iResolution) {
     fragCoord.y = -fragCoord.y;
     iResolution.y = -iResolution.y;
 
     bool hit;
     int objectID;
-    vec3 color;
 
     vec2 scale = 8.0 * iResolution.xy / max(iResolution.x, iResolution.y);
     vec2 uv = scale * (fragCoord/iResolution.xy - vec2(0.5));
     vec3 dir = normalize(vec3(uv, 0) - eye);
     vec3 p = trace(eye, dir, hit, objectID);
 
+    vec3 color = vec3(0.1, 0.1, 0.2);
+
     if (hit) {
         vec3 l   = normalize(light - p);
         vec3 v   = normalize(eye - p);
         vec3 n   = generateNormal(p, EPS);
         float nl = max(0.0, dot(n, l));
-        vec3 h  = normalize(l + n);
+        vec3 h   = normalize(l + n);
         float hn = max(0.0, dot(h,n));
         float sp = pow(hn, 100.0);
 
         float shadow = softShadow(p + n * EPS, l, EPS, 10.0);
 
+        vec3 norm = abs(n);
+        norm /= (norm.x + norm.y + norm.z);
+
         if (objectID == 1) {
-            color = color = 0.7 * vec3(nl) + 0.3 * cos(0.0+uv.xyx+vec3(0,2,4)) + sp * vec3(1.0, 1.0, 1.0);
+            vec3 sphereCenter = getMovingSphereCenter();
+            vec3 localPos = p - sphereCenter;
+
+            float u = 0.5 + atan(localPos.z, localPos.x) / (2.0 * 3.14159);
+            float v = 0.5 - asin(localPos.y) / 3.14159;
+
+            vec3 SphereAlbedo = texture(iChannel0, vec2(u, v)).rgb;
+
+            color = SphereAlbedo * (0.7 * vec3(nl) + 0.3 * cos(0.0+uv.xyx+vec3(0,2,4)) + sp * vec3(1.0, 1.0, 1.0));
         } else if (objectID == 2) {
-            color = vec3(0.4, 0.5, 0.5) * nl * shadow;
+            vec3 PlainAlbedo =
+                norm.x * texture(iChannel1, p.yz).rgb +
+                norm.y * texture(iChannel1, p.xz).rgb +
+                norm.z * texture(iChannel1, p.xy).rgb;
+            color = PlainAlbedo * (vec3(0.4, 0.5, 0.5) * nl * shadow);
         }
-    } else {
-        color = vec3(0.1, 0.1, 0.2);
     }
 
     fragColor = vec4(color, 1.0);
@@ -136,13 +155,8 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord, in vec2 iResolution) {
 
 void main()
 {
-  ivec2 uv = ivec2(gl_GlobalInvocationID.xy);
+  vec2 fragCoord = gl_FragCoord.xy;
 
-  vec4 fragCol;
   vec2 iResolution = vec2(1280.0, 720.0);
-
-  mainImage(fragCol, uv, iResolution);
-
-  if (uv.x < iResolution.x && uv.y < iResolution.y)
-    imageStore(resultImage, uv, fragCol);
+  mainImage(fragCoord, iResolution);
 }
