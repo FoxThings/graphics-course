@@ -2,6 +2,10 @@
 #extension GL_ARB_separate_shader_objects : enable
 
 layout(location = 0) out vec4 fragColor;
+layout(push_constant) uniform params {
+  uvec2 iResolution;
+  float iTime;
+};
 
 layout(binding = 0) uniform sampler2D iChannel0;
 layout(binding = 1) uniform sampler2D iChannel1;
@@ -24,7 +28,7 @@ float planeSDF(vec3 p) {
 }
 
 vec3 getMovingSphereCenter() {
-    float shpereY = sin(-1.0) * 1.0 + 2.0;
+    float shpereY = sin(-iTime) * 1.0 + 2.0;
 
     return vec3(0, shpereY, 0);
 }
@@ -140,7 +144,7 @@ void mainImage(in vec2 fragCoord, in vec2 iResolution) {
 
             vec3 SphereAlbedo = texture(iChannel0, vec2(u, v)).rgb;
 
-            color = SphereAlbedo * (0.7 * vec3(nl) + 0.3 * cos(0.0+uv.xyx+vec3(0,2,4)) + sp * vec3(1.0, 1.0, 1.0));
+            color = SphereAlbedo * (0.7 * vec3(nl) + 0.3 * cos(iTime+uv.xyx+vec3(0,2,4)) + sp * vec3(1.0, 1.0, 1.0));
         } else if (objectID == 2) {
             vec3 PlainAlbedo =
                 norm.x * texture(iChannel1, p.yz).rgb +
@@ -157,6 +161,5 @@ void main()
 {
   vec2 fragCoord = gl_FragCoord.xy;
 
-  vec2 iResolution = vec2(1280.0, 720.0);
   mainImage(fragCoord, iResolution);
 }

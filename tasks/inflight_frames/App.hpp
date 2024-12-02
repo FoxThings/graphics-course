@@ -11,6 +11,12 @@
 #include <etna/RenderTargetStates.hpp>
 #include <etna/Sampler.hpp>
 
+struct ShaderParams
+{
+  glm::uvec2 resolution;
+  float time;
+};
+
 
 class App
 {
@@ -40,6 +46,9 @@ private:
 
   std::unique_ptr<etna::Window> vkWindow;
   std::unique_ptr<etna::PerFrameCmdMgr> commandManager;
+
+  std::chrono::system_clock::time_point startTime;
+  ShaderParams currentParams;
 
   etna::ComputePipeline proceduralTexturePipeline;
   etna::Image proceduralTextureImage;

@@ -116,6 +116,8 @@ App::App()
   );
 
   this->loadResources();
+
+  startTime = std::chrono::system_clock::now();
 }
 
 App::~App()
@@ -177,6 +179,11 @@ void App::drawFrame()
       // Usually, flushes should be placed before "action", i.e. compute dispatches
       // and blit/copy operations.
       etna::flush_barriers(currentCmdBuf);
+
+      currentParams = ShaderParams {
+      .resolution = resolution,
+        .time = std::chrono::duration<float>(std::chrono::system_clock::now() - startTime).count()
+      };
 
       const auto attachments = etna::RenderTargetState::AttachmentParams {
         .image = backbuffer,
@@ -274,6 +281,8 @@ void App::textureStage(const vk::CommandBuffer& currentCmdBuf) const
   );
   etna::flush_barriers(currentCmdBuf);
 
+  currentCmdBuf.pushConstants( proceduralTexturePipeline.getVkPipelineLayout(), vk::ShaderStageFlagBits::eCompute, 0, sizeof(currentParams), &currentParams);
+
   const int groupSize = 32;
   currentCmdBuf.dispatch(
     resolution.x / groupSize + 1,
@@ -346,6 +355,8 @@ void App::drawStage(
     { attachmentParams },
     {}
   };
+
+  currentCmdBuf.pushConstants(mainPipeline.getVkPipelineLayout(), vk::ShaderStageFlagBits::eFragment, 0, sizeof(currentParams), &currentParams);
 
   currentCmdBuf.draw(3, 1, 0, 0);
 }
