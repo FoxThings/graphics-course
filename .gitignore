@@ -5,5 +5,8 @@ external
 .vs
 .cache
 .vscode
+.idea/*
+cmake-build-debug/*
+tasks/cmake-build-debug/*
 CMakeSettings.json
 CMakeUserPresets.json
