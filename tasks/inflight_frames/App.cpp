@@ -1,11 +1,12 @@
 #include "App.hpp"
 
 #include <etna/Etna.hpp>
-#include <etna/GlobalContext.hpp>
 #include <etna/PipelineManager.hpp>
 #include <stb_image.h>
 #include <etna/BlockingTransferHelper.hpp>
+#include <etna/Profiling.hpp>
 #include <etna/RenderTargetStates.hpp>
+#include <tracy/Tracy.hpp>
 
 App::App()
   : resolution{1280, 720}
@@ -37,7 +38,7 @@ App::App()
       .deviceExtensions = deviceExtensions,
       // Replace with an index if etna detects your preferred GPU incorrectly
       .physicalDeviceIndexOverride = {},
-      .numFramesInFlight = 1,
+      .numFramesInFlight = FRAMES_AMOUNT,
     });
   }
 
@@ -118,6 +119,17 @@ App::App()
   this->loadResources();
 
   startTime = std::chrono::system_clock::now();
+
+  for (unsigned int i = 0; i < FRAMES_AMOUNT; ++i) {
+    auto buffer = etna::get_context().createBuffer(etna::Buffer::CreateInfo{
+      .size = sizeof(ShaderParams),
+      .bufferUsage = vk::BufferUsageFlagBits::eUniformBuffer,
+      .memoryUsage = VMA_MEMORY_USAGE_CPU_ONLY,
+      .name = "shaderParams",
+    });
+    buffer.map();
+    paramsBuffers.push_back(std::move(buffer));
+  }
 }
 
 App::~App()
@@ -132,6 +144,8 @@ void App::run()
     windowing.poll();
 
     drawFrame();
+    ++framesCount;
+    FrameMark;
   }
 
   // We need to wait for the GPU to execute the last frame before destroying
@@ -158,6 +172,8 @@ void App::drawFrame()
 
     ETNA_CHECK_VK_RESULT(currentCmdBuf.begin(vk::CommandBufferBeginInfo{}));
     {
+      ETNA_PROFILE_GPU(currentCmdBuf, "Frame rendering");
+
       // First of all, we need to "initialize" th "backbuffer", aka the current swapchain
       // image, into a state that is appropriate for us working with it. The initial state
       // is considered to be "undefined" (aka "I contain trash memory"), by the way.
@@ -180,10 +196,13 @@ void App::drawFrame()
       // and blit/copy operations.
       etna::flush_barriers(currentCmdBuf);
 
-      currentParams = ShaderParams {
-      .resolution = resolution,
+      auto params = ShaderParams {
+        .resolution = resolution,
+        .mousePosition = osWindow->mouse.freePos,
         .time = std::chrono::duration<float>(std::chrono::system_clock::now() - startTime).count()
       };
+
+      std::memcpy(paramsBuffers[framesCount % FRAMES_AMOUNT].data(), &params, sizeof(params));
 
       const auto attachments = etna::RenderTargetState::AttachmentParams {
         .image = backbuffer,
@@ -206,6 +225,7 @@ void App::drawFrame()
         vk::ImageAspectFlagBits::eColor);
       // And of course flush the layout transition.
       etna::flush_barriers(currentCmdBuf);
+      ETNA_READ_BACK_GPU_PROFILING(currentCmdBuf);
     }
     ETNA_CHECK_VK_RESULT(currentCmdBuf.end());
 
@@ -238,6 +258,8 @@ void App::drawFrame()
 
 void App::textureStage(const vk::CommandBuffer& currentCmdBuf) const
 {
+  ETNA_PROFILE_GPU(currentCmdBuf, "Proceudarl texture stage");
+
   const auto info = etna::get_shader_program(textureProgramName);
   const auto set = etna::create_descriptor_set(
     info.getDescriptorLayoutId(0),
@@ -249,6 +271,10 @@ void App::textureStage(const vk::CommandBuffer& currentCmdBuf) const
           proceduralTextureSampler.get(),
           vk::ImageLayout::eGeneral
         )
+      },
+      etna::Binding {
+  1,
+  paramsBuffers[framesCount % FRAMES_AMOUNT].genBinding()
       }
     }
   );
@@ -281,8 +307,6 @@ void App::textureStage(const vk::CommandBuffer& currentCmdBuf) const
   );
   etna::flush_barriers(currentCmdBuf);
 
-  currentCmdBuf.pushConstants( proceduralTexturePipeline.getVkPipelineLayout(), vk::ShaderStageFlagBits::eCompute, 0, sizeof(currentParams), &currentParams);
-
   const int groupSize = 32;
   currentCmdBuf.dispatch(
     resolution.x / groupSize + 1,
@@ -296,6 +320,8 @@ void App::drawStage(
   etna::RenderTargetState::AttachmentParams attachmentParams
 ) const
 {
+  ETNA_PROFILE_GPU(currentCmdBuf, "Graphic shader stage");
+
   const auto info = etna::get_shader_program(shaderProgramName);
   const auto set = etna::create_descriptor_set(
     info.getDescriptorLayoutId(0),
@@ -314,6 +340,10 @@ void App::drawStage(
           textureSampler.get(),
           vk::ImageLayout::eGeneral
         )
+      },
+      etna::Binding {
+        2,
+        paramsBuffers[framesCount % FRAMES_AMOUNT].genBinding()
       },
     }
   );
@@ -355,8 +385,6 @@ void App::drawStage(
     { attachmentParams },
     {}
   };
-
-  currentCmdBuf.pushConstants(mainPipeline.getVkPipelineLayout(), vk::ShaderStageFlagBits::eFragment, 0, sizeof(currentParams), &currentParams);
 
   currentCmdBuf.draw(3, 1, 0, 0);
 }

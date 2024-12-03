@@ -2,13 +2,14 @@
 #extension GL_ARB_separate_shader_objects : enable
 
 layout(location = 0) out vec4 fragColor;
-layout(push_constant) uniform params {
-  uvec2 iResolution;
-  float iTime;
-};
 
 layout(binding = 0) uniform sampler2D iChannel0;
 layout(binding = 1) uniform sampler2D iChannel1;
+layout(binding = 2, set = 0) uniform params {
+  uvec2 iResolution;
+  uvec2 iMouse;
+  float iTime;
+};
 
 #define MAX_STEPS    90
 #define MAX_DIST     10.0

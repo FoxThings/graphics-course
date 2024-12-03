@@ -11,12 +11,14 @@
 #include <etna/RenderTargetStates.hpp>
 #include <etna/Sampler.hpp>
 
+constexpr unsigned int FRAMES_AMOUNT = 3;
+
 struct ShaderParams
 {
   glm::uvec2 resolution;
+  glm::uvec2 mousePosition;
   float time;
 };
-
 
 class App
 {
@@ -48,7 +50,8 @@ private:
   std::unique_ptr<etna::PerFrameCmdMgr> commandManager;
 
   std::chrono::system_clock::time_point startTime;
-  ShaderParams currentParams;
+  unsigned int framesCount = 0;
+  std::vector<etna::Buffer> paramsBuffers;
 
   etna::ComputePipeline proceduralTexturePipeline;
   etna::Image proceduralTextureImage;
