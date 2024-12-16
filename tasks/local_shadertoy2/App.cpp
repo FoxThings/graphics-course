@@ -184,6 +184,7 @@ void App::drawFrame()
       };
 
       this->textureStage(currentCmdBuf);
+
       this->drawStage(currentCmdBuf, attachments);
 
       // At the end of "rendering", we are required to change how the pixels of the
@@ -231,6 +232,17 @@ void App::drawFrame()
 
 void App::textureStage(const vk::CommandBuffer& currentCmdBuf) const
 {
+  // Setting state of compute shader for image
+  etna::set_state(
+    currentCmdBuf,
+    proceduralTextureImage.get(),
+    vk::PipelineStageFlagBits2::eComputeShader,
+    vk::AccessFlagBits2::eShaderWrite,
+    vk::ImageLayout::eGeneral,
+    vk::ImageAspectFlagBits::eColor
+  );
+  etna::flush_barriers(currentCmdBuf);
+
   const auto info = etna::get_shader_program(textureProgramName);
   const auto set = etna::create_descriptor_set(
     info.getDescriptorLayoutId(0),
@@ -263,17 +275,6 @@ void App::textureStage(const vk::CommandBuffer& currentCmdBuf) const
     nullptr
   );
 
-  // Setting state of compute shader for image
-  etna::set_state(
-    currentCmdBuf,
-    proceduralTextureImage.get(),
-    vk::PipelineStageFlagBits2::eComputeShader,
-    vk::AccessFlagBits2::eShaderWrite,
-    vk::ImageLayout::eGeneral,
-    vk::ImageAspectFlagBits::eColor
-  );
-  etna::flush_barriers(currentCmdBuf);
-
   const int groupSize = 32;
   currentCmdBuf.dispatch(
     resolution.x / groupSize + 1,
@@ -287,6 +288,17 @@ void App::drawStage(
   etna::RenderTargetState::AttachmentParams attachmentParams
 ) const
 {
+  // Setting state of graphic shader
+  etna::set_state(
+    currentCmdBuf,
+    proceduralTextureImage.get(),
+    vk::PipelineStageFlagBits2::eFragmentShader,
+    vk::AccessFlagBits2::eShaderSampledRead,
+    vk::ImageLayout::eShaderReadOnlyOptimal,
+    vk::ImageAspectFlagBits::eColor
+  );
+  etna::flush_barriers(currentCmdBuf);
+
   const auto info = etna::get_shader_program(shaderProgramName);
   const auto set = etna::create_descriptor_set(
     info.getDescriptorLayoutId(0),
@@ -296,14 +308,14 @@ void App::drawStage(
         0,
         proceduralTextureImage.genBinding(
           proceduralTextureSampler.get(),
-          vk::ImageLayout::eGeneral
+          vk::ImageLayout::eShaderReadOnlyOptimal
         )
       },
       etna::Binding {
         1,
         textureImage.genBinding(
           textureSampler.get(),
-          vk::ImageLayout::eGeneral
+          vk::ImageLayout::eShaderReadOnlyOptimal
         )
       },
     }
@@ -325,17 +337,6 @@ void App::drawStage(
     0,
     nullptr
   );
-
-  // Setting state of graphic shader
-  etna::set_state(
-    currentCmdBuf,
-    proceduralTextureImage.get(),
-    vk::PipelineStageFlagBits2::eFragmentShader,
-    vk::AccessFlagBits2::eShaderSampledRead,
-    vk::ImageLayout::eGeneral,
-    vk::ImageAspectFlagBits::eColor
-  );
-  etna::flush_barriers(currentCmdBuf);
 
   etna::RenderTargetState target{
     currentCmdBuf,
